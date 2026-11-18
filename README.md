@@ -1,6 +1,35 @@
 # Welcome to [TechEmpower Framework Benchmarks (TFB)](http://www.techempower.com/benchmarks/)
 
-[![Build Status](https://travis-ci.org/TechEmpower/FrameworkBenchmarks.svg?branch=master)](https://travis-ci.org/TechEmpower/FrameworkBenchmarks)
+[![Verify FSharp benchmarks](https://github.com/giraffe-fsharp/FrameworkBenchmarks/actions/workflows/verify-fsharp.yml/badge.svg?branch=master)](https://github.com/giraffe-fsharp/FrameworkBenchmarks/actions/workflows/verify-fsharp.yml)
+
+## CI in the Giraffe fork
+
+GitHub Actions replaces Travis CI in this fork. Pull requests, pushes to `master`
+and manual runs build the existing Dockerfiles for all eight F# variants:
+Falco, Frank, Giraffe (System.Text.Json, Newtonsoft.Json and Utf8Json), Suave,
+and Zebra (default and simple).
+
+CI checks the plaintext, JSON and database-backed fortunes endpoints configured
+for each variant, including fortune contents, ordering and HTML escaping.
+PostgreSQL is seeded with the existing benchmark data. The HTTP verifier uses
+Python 3 without the old Python 2 Travis selection script or toolset image.
+The benchmark applications, dependencies and container runtime versions are
+unchanged; in particular, these historical benchmarks still target .NET 5.
+
+Run the verifier's tests locally with:
+
+```console
+python3 -m unittest discover -s toolset/ci -p 'test_*.py'
+```
+
+For a running benchmark with its database configured, verify its HTTP endpoints:
+
+```console
+python3 toolset/ci/verify_fsharp.py frameworks/FSharp/giraffe default http://127.0.0.1:8080
+```
+
+This focused CI does not run other languages or collect performance measurements.
+The existing `tfb` harness remains available for full benchmark runs.
 
 If you're new to the project, welcome! Please feel free to ask questions [here](https://github.com/TechEmpower/FrameworkBenchmarks/issues/2978). We encourage new frameworks and contributors to ask questions. We're here to help!
 
