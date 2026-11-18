@@ -1,0 +1,87 @@
+name: Verify FSharp benchmarks
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - framework: falco
+            variant: default
+            dockerfile: falco
+          - framework: frank
+            variant: default
+            dockerfile: frank
+          - framework: giraffe
+            variant: default
+            dockerfile: giraffe
+          - framework: giraffe
+            variant: newtonsoft
+            dockerfile: giraffe-newtonsoft
+          - framework: giraffe
+            variant: utf8json
+            dockerfile: giraffe-utf8json
+          - framework: suave
+            variant: default
+            dockerfile: suave
+          - framework: zebra
+            variant: default
+            dockerfile: zebra
+          - framework: zebra
+            variant: simple
+            dockerfile: zebra-simple
+    services:
+      tfb-database:
+        image: postgres:14
+        env:
+          POSTGRES_DB: hello_world
+          POSTGRES_USER: benchmarkdbuser
+          POSTGRES_PASSWORD: benchmarkdbpass
+        options: >-
+          --health-cmd "pg_isready -U benchmarkdbuser -d hello_world"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FRAMEWORK_DIR: frameworks/FSharp/${{ matrix.framework }}
+      VARIANT: ${{ matrix.variant }}
+      DOCKERFILE: ${{ matrix.dockerfile }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test HTTP verifier
+        run: python3 -m unittest discover -s toolset/ci -p 'test_*.py'
+      - name: Build benchmark container
+        run: docker build --tag benchmark --file "$FRAMEWORK_DIR/$DOCKERFILE.dockerfile" "$FRAMEWORK_DIR"
+      - name: Seed benchmark database
+        env:
+          POSTGRES_ID: ${{ job.services.tfb-database.id }}
+        run: docker exec -i "$POSTGRES_ID" psql -U benchmarkdbuser -d hello_world -v ON_ERROR_STOP=1 < toolset/databases/postgres/create-postgres.sql
+      - name: Start benchmark
+        env:
+          DATABASE_NETWORK: ${{ job.services.tfb-database.network }}
+        run: docker run --detach --name benchmark --network "$DATABASE_NETWORK" --publish 127.0.0.1:8080:8080 benchmark
+      - name: Verify configured HTTP endpoints
+        run: python3 toolset/ci/verify_fsharp.py "$FRAMEWORK_DIR" "$VARIANT" http://127.0.0.1:8080
+      - name: Container logs
+        if: always()
+        run: |
+          if docker container inspect benchmark > /dev/null 2>&1; then
+            docker logs benchmark
+          fi
+      - name: Stop benchmark
+        if: always()
+        run: |
+          if docker container inspect benchmark > /dev/null 2>&1; then
+            docker rm --force benchmark
+          fi
