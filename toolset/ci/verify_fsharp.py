@@ -94,9 +94,10 @@ def verify(framework_dir, variant, base_url):
                 break
         except HTTPError:
             raise
-        except (URLError, TimeoutError) as error:
+        except (URLError, TimeoutError, ConnectionResetError) as error:
             if time.monotonic() >= deadline:
                 raise TimeoutError(f"Benchmark did not start: {readiness_url}") from error
+            print(f"Waiting for {readiness_url}: {error}", flush=True)
             time.sleep(1)
 
     fortunes = expected_fortunes() if "fortune_url" in settings else []

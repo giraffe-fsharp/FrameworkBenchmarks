@@ -1,10 +1,32 @@
 import unittest
 from html import escape
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError
 
-from verify_fsharp import verify_response
+from verify_fsharp import verify, verify_response
 
 
 class VerifyResponseTests(unittest.TestCase):
+    @patch("verify_fsharp.time.sleep")
+    @patch("verify_fsharp.urlopen")
+    def test_waits_for_container_proxy_to_accept_connections(self, open_url, sleep):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.read.return_value = b'{"message":"Hello, World!"}'
+        response.headers = {"Content-Type": "application/json"}
+        open_url.side_effect = [ConnectionResetError("starting"), response, response]
+        verify(Path("frameworks/FSharp/giraffe"), "newtonsoft", "http://localhost:8080")
+        sleep.assert_called_once_with(1)
+
+    @patch("verify_fsharp.time.sleep")
+    @patch("verify_fsharp.urlopen")
+    def test_http_errors_fail_without_retrying(self, open_url, sleep):
+        open_url.side_effect = HTTPError("http://localhost:8080/json", 500, "error", {}, None)
+        with self.assertRaises(HTTPError):
+            verify(Path("frameworks/FSharp/giraffe"), "newtonsoft", "http://localhost:8080")
+        sleep.assert_not_called()
+
     def test_json_and_plaintext(self):
         verify_response("json", '{"message":"Hello, World!"}', "application/json", [])
         verify_response("plaintext", "Hello, World!", "text/plain; charset=utf-8", [])
